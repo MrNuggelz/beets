@@ -16,12 +16,16 @@
 """A Web interface to beets."""
 from __future__ import division, absolute_import, print_function
 
+from beets.autotag import Distance, AlbumMatch, AlbumInfo
+from flask.json import jsonify, JSONEncoder
+
+from beets.importer import action, SingletonImportTask, ImportTask
 from beets.plugins import BeetsPlugin
-from beets import ui
+from beets import ui, plugins
 from beets import util
 import beets.library
 import flask
-from flask import g
+from flask import g, request
 from werkzeug.routing import BaseConverter, PathConverter
 import os
 from unidecode import unidecode
@@ -30,6 +34,8 @@ import base64
 
 
 # Utilities.
+from beetsplug.web.WebImporter import WebImporter
+
 
 def _rep(obj, expand=False):
     """Get a flat -- i.e., JSON-ish -- representation of a beets Item or
@@ -187,6 +193,28 @@ class QueryConverter(PathConverter):
 class EverythingConverter(PathConverter):
     regex = '.*?'
 
+class TaskEncoder(JSONEncoder):
+
+    def default(self, o):
+        if isinstance(o,ImportTask):
+            return {
+                'candidates': self.default(o.candidates[0]),
+                'cur_album':o.cur_album,
+                'cur_artist':o.cur_artist,
+                'is_album':o.is_album,
+                # 'items': o.items,
+                'paths':o.paths,
+                'search_ids': o.search_ids,
+                'toppath': o.toppath
+                }
+        if isinstance(o,AlbumMatch):
+            return {
+                'distance': o.distance.distance,
+                'info': o.info
+            }
+        if isinstance(o,AlbumInfo):
+            return o.__dict__
+        return str(o)
 
 # Flask setup.
 
@@ -194,6 +222,7 @@ app = flask.Flask(__name__)
 app.url_map.converters['idlist'] = IdListConverter
 app.url_map.converters['query'] = QueryConverter
 app.url_map.converters['everything'] = EverythingConverter
+app.json_encoder = TaskEncoder
 
 
 @app.before_request
@@ -265,6 +294,43 @@ def item_at_path(path):
     else:
         return flask.abort(404)
 
+session = None
+
+@app.route('/import', methods=['GET', 'POST'])
+def run_import():
+    global session
+    if request.method == 'GET':
+        return jsonify(session.tasks)
+    elif request.method == 'POST':
+        data = request.get_json()
+        if not data or 'paths' not in data or not type(data['paths']) is list:
+            return "paths must be a list"
+        paths = data['paths']
+        session = WebImporter(g.lib,None,paths,None)
+        session.run()
+        plugins.send('import', lib=g.lib, paths=paths)
+        return jsonify(session.tasks)
+
+@app.route('/import/<int:task_index>')
+def import_info(task_index):
+    global session
+    return jsonify(session.tasks[task_index])
+
+@app.route('/import/<int:task_index>/user_query/<string:user_query>/', methods=['PUT'])
+def import_user_query(task_index,user_query):
+    global session
+    task = session.tasks.pop(task_index)
+    task.set_choice(action[user_query])
+    session.user_query(task)
+    return jsonify(session.tasks)
+
+@app.route('/import/<int:task_index>/apply/<int:candidate_index>', methods=['PUT'])
+def import_apply(task_index,candidate_index):
+    global session
+    task = session.tasks.pop(task_index)
+    task.set_choice(task.candidates[candidate_index])
+    session.import_task(task)
+    return jsonify(task)
 
 @app.route('/item/values/<string:key>')
 def item_unique_field_values(key):
