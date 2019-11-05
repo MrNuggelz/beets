@@ -16,7 +16,7 @@
 """A Web interface to beets."""
 from __future__ import division, absolute_import, print_function
 
-from beets.autotag import Distance, AlbumMatch, AlbumInfo
+from beets.autotag import Distance, AlbumMatch, AlbumInfo, TrackInfo
 from flask.json import jsonify, JSONEncoder
 
 from beets.importer import action, SingletonImportTask, ImportTask
@@ -34,6 +34,7 @@ import base64
 
 
 # Utilities.
+from beets.ui.commands import dist_string, penalty_string, disambig_string
 from beetsplug.web.WebImporter import WebImporter
 
 
@@ -196,23 +197,25 @@ class EverythingConverter(PathConverter):
 class TaskEncoder(JSONEncoder):
 
     def default(self, o):
-        if isinstance(o,ImportTask):
-            return {
-                'candidates': self.default(o.candidates[0]),
-                'cur_album':o.cur_album,
-                'cur_artist':o.cur_artist,
-                'is_album':o.is_album,
-                # 'items': o.items,
-                'paths':o.paths,
-                'search_ids': o.search_ids,
-                'toppath': o.toppath
-                }
-        if isinstance(o,AlbumMatch):
+        # if isinstance(o,ImportTask):
+        #     return {
+        #         'candidates': self.default(o.candidates[0]),
+        #         'cur_album':o.cur_album,
+        #         'cur_artist':o.cur_artist,
+        #         'is_album':o.is_album,
+        #         # 'items': o.items,
+        #         'paths':o.paths,
+        #         'search_ids': o.search_ids,
+        #         'toppath': o.toppath
+        #         }
+        if isinstance(o, AlbumMatch):
             return {
                 'distance': o.distance.distance,
                 'info': o.info
             }
-        if isinstance(o,AlbumInfo):
+        if isinstance(o,Distance):
+            return "distance"
+        if isinstance(o,TrackInfo) or isinstance(o,AlbumInfo):
             return o.__dict__
         return str(o)
 
@@ -300,35 +303,48 @@ session = None
 def run_import():
     global session
     if request.method == 'GET':
-        return jsonify(session.tasks)
+        return flask.render_template('import.html',imports=session.tasks if session else [])
     elif request.method == 'POST':
-        data = request.get_json()
-        if not data or 'paths' not in data or not type(data['paths']) is list:
-            return "paths must be a list"
-        paths = data['paths']
+        form = request.form
+        if not form or 'path' not in form or not type(form['path']) is str:
+            return "paths must be a set"
+        paths = [form['path']]
         session = WebImporter(g.lib,None,paths,None)
         session.run()
         plugins.send('import', lib=g.lib, paths=paths)
-        return jsonify(session.tasks)
+        return flask.render_template('import.html',imports=session.tasks if session else [])
 
-@app.route('/import/<int:task_index>')
+
+@app.route('/api/import/<int:task_index>')
 def import_info(task_index):
     global session
     return jsonify(session.tasks[task_index])
 
-@app.route('/import/<int:task_index>/user_query/<string:user_query>/', methods=['PUT'])
-def import_user_query(task_index,user_query):
-    global session
-    task = session.tasks.pop(task_index)
-    task.set_choice(action[user_query])
-    session.user_query(task)
-    return jsonify(session.tasks)
 
-@app.route('/import/<int:task_index>/apply/<int:candidate_index>', methods=['PUT'])
-def import_apply(task_index,candidate_index):
+@app.route('/api/import/skip', methods=['PUT'])
+def import_skip():
     global session
-    task = session.tasks.pop(task_index)
-    task.set_choice(task.candidates[candidate_index])
+    data = request.get_json()
+    task = session.tasks.pop(data['task_index'])
+    return jsonify(task)
+
+
+@app.route('/api/import/asIs', methods=['PUT'])
+def import_as_is():
+    global session
+    data = request.get_json()
+    task = session.tasks.pop(data['task_index'])
+    task.set_choice(action.ASIS)
+    session.import_task(task)
+    return jsonify(task)
+
+
+@app.route('/api/import/apply', methods=['PUT'])
+def import_apply():
+    global session
+    data = request.get_json()
+    task = session.tasks.pop(data['task_index'])
+    task.set_choice(task.candidates[data['candidate_index']])
     session.import_task(task)
     return jsonify(task)
 

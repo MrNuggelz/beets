@@ -1,0 +1,89 @@
+<!doctype html>
+<head>
+    <title>{% block title %}{% endblock %} - Flaskr</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='beets.css') }}" type="text/css">
+
+    <script src="{{ url_for('static', filename='jquery.js') }}"></script>
+    <script src="{{ url_for('static', filename='underscore.js') }}">
+    </script>
+    <script src="{{ url_for('static', filename='backbone.js') }}"></script>
+    <script src="{{ url_for('static', filename='beets.js') }}"></script>
+    <script>
+        function applyTask(task_index) {
+            console.log('accepting task :' + task_index);
+            //TODO: show error
+            $.ajax({
+                url: '/api/import/apply',
+                type: 'PUT',
+                contentType: 'application/json',
+                data: JSON.stringify({"task_index": task_index ,"candidate_index": 0 }),
+                success: function (data) {
+                    window.location.href = "/import"
+                },
+                error: function (data) {
+                    alert(data)
+                }
+            });
+        }
+
+
+        function skip(task_index) {
+            $.ajax({
+                url: '/api/import/skip',
+                type: 'PUT',
+                contentType: 'application/json',
+                data: JSON.stringify({"task_index": task_index}),
+                success: function (data) {
+                    window.location.replace("/import")
+                },
+                error: function (xhr) {
+                    alert(xhr.responseText())
+                }
+            });
+        }
+
+        function asIs(task_index) {
+            $.ajax({
+                url: '/api/import/asIs',
+                type: 'PUT',
+                contentType: 'application/json',
+                data: JSON.stringify({"task_index": task_index}),
+                success: function (data) {
+                    window.location.replace("/import")
+                },
+                error: function (xhr) {
+                    alert(xhr.responseText())
+                }
+            });
+        }
+    </script>
+</head>
+<section class="content">
+    <div style="float: left">
+        <span>Tasks:</span><br>
+        {% for task in imports %}
+        <div class="importTask">
+            <span>{{ task.paths[0].decode('utf-8') }} ({{ task.items.__len__() }} items)</span><br>
+            <span>Tagging:</span><br>
+            <span style="margin-left: 2em;">{{ task.cur_artist }} - {{ task.cur_album }}</span><br>
+            <span>URL:</span><br>
+            <span style="margin-left: 2em;">{{ task.candidates[0].info.data_url }}</span><br>
+            <span>(Similarity {{ 100*(1.00-task.candidates[0].distance.distance) }})</span><br>
+            <button onclick=applyTask({{ loop.index0 }})>Apply</button>
+            <button onclick=skip({{ loop.index0 }})>Skip</button>
+            <button onclick=asIs({{ loop.index0 }})>Use as-is</button>
+            <br>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div style="float: right">
+        <span>Import Music:</span>
+        <form action="/import" method="POST">
+            <span>Path:</span><input name="path">
+            <input type="submit" value="start">
+        </form>
+    </div>
+</section>
