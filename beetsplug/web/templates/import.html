@@ -58,24 +58,55 @@
                 }
             });
         }
+
+        function asTracks(task_index) {
+            $.ajax({
+                url: '/api/import/asTracks',
+                type: 'PUT',
+                contentType: 'application/json',
+                data: JSON.stringify({"task_index": task_index}),
+                success: function (data) {
+                    window.location.replace("/import")
+                },
+                error: function (xhr) {
+                    alert(xhr.responseText())
+                }
+            });
+        }
     </script>
 </head>
 <section class="content">
     <div style="float: left">
         <span>Tasks:</span><br>
         {% for task in imports %}
-        <div class="importTask">
-            <span>{{ task.paths[0].decode('utf-8') }} ({{ task.items.__len__() }} items)</span><br>
-            <span>Tagging:</span><br>
-            <span style="margin-left: 2em;">{{ task.cur_artist }} - {{ task.cur_album }}</span><br>
-            <span>URL:</span><br>
-            <span style="margin-left: 2em;">{{ task.candidates[0].info.data_url }}</span><br>
-            <span>(Similarity {{ 100*(1.00-task.candidates[0].distance.distance) }})</span><br>
-            <button onclick=applyTask({{ loop.index0 }})>Apply</button>
-            <button onclick=skip({{ loop.index0 }})>Skip</button>
-            <button onclick=asIs({{ loop.index0 }})>Use as-is</button>
-            <br>
-        </div>
+            {% if task.is_album %}
+                <div class="importTask">
+                    <span>{{ task.paths[0].decode('utf-8') }} ({{ task.items.__len__() }} items)</span><br>
+                    <span>Tagging:</span><br>
+                    <span style="margin-left: 2em;">{{ task.cur_artist }} - {{ task.cur_album }}</span><br>
+                    <span>URL:</span><br>
+                    <span style="margin-left: 2em;">{{ task.candidates[0].info.data_url }}</span><br>
+                    <span>(Similarity {{ 100*(1.00-task.candidates[0].distance.distance) }})</span><br>
+                    <button onclick=applyTask({{ loop.index0 }})>Apply</button>
+                    <button onclick=skip({{ loop.index0 }})>Skip</button>
+                    <button onclick=asIs({{ loop.index0 }})>Use as-is</button>
+                    <button onclick=asTracks({{ loop.index0 }})>As Tracks</button>
+                    <br>
+                </div>
+            {% else %}
+                <div class="importTask">
+                    <span>{{ task.paths[0].decode('utf-8') }} ({{ task.items.__len__() }} items)</span><br>
+                    <span>Tagging:</span><br>
+                    <span style="margin-left: 2em;">{{ task.item.artist }} - {{ task.item.title }}</span><br>
+                    <span>URL:</span><br>
+                    <span style="margin-left: 2em;">{{ task.candidates[0].info.data_url }}</span><br>
+                    <span>(Similarity {{ 100*(1.00-task.candidates[0].distance.distance) }})</span><br>
+                    <button onclick=applyTask({{ loop.index0 }})>Apply</button>
+                    <button onclick=skip({{ loop.index0 }})>Skip</button>
+                    <button onclick=asIs({{ loop.index0 }})>Use as-is</button>
+                    <br>
+                </div>
+            {% endif %}
         {% endfor %}
     </div>
 
