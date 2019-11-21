@@ -339,6 +339,16 @@ def import_as_is():
     return jsonify(task)
 
 
+@app.route('/api/import/asTracks', methods=['PUT'])
+def import_as_tracks():
+    global session
+    data = request.get_json()
+    task = session.tasks.pop(data['task_index'])
+    task.set_choice(action.TRACKS)
+    session.as_tracks(task)
+    return jsonify(task)
+
+
 @app.route('/api/import/apply', methods=['PUT'])
 def import_apply():
     global session
@@ -347,6 +357,7 @@ def import_apply():
     task.set_choice(task.candidates[data['candidate_index']])
     session.import_task(task)
     return jsonify(task)
+
 
 @app.route('/item/values/<string:key>')
 def item_unique_field_values(key):
