@@ -328,6 +328,24 @@ def import_skip():
     return jsonify(task)
 
 
+@app.route('/api/import/searchId', methods=['PUT'])
+def search_id():
+    global session
+    data = request.get_json()
+    task = session.tasks[data['task_index']]
+    session.search_id(task,data['id'])
+    return jsonify(task)
+
+
+@app.route('/api/import/searchName', methods=['PUT'])
+def search_name():
+    global session
+    data = request.get_json()
+    task = session.tasks[data['task_index']]
+    bla = session.search_name(task, data['artist'], data['name'])
+    return jsonify(task)
+
+
 @app.route('/api/import/asIs', methods=['PUT'])
 def import_as_is():
     global session
