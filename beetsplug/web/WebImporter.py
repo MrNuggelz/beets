@@ -1,9 +1,11 @@
 from beets.autotag import Recommendation
 
-from beets import importer, config, plugins
-from beets.importer import apply_choice, plugin_stage, manipulate_files, QUEUE_SIZE, ImportAbort, read_tasks, \
-    lookup_candidates, SentinelImportTask, SingletonImportTask, action, group_albums, _extend_pipeline
-from beets.ui.commands import _summary_judgment
+from beets import importer, config, plugins, autotag
+from beets.importer import apply_choice, plugin_stage, manipulate_files, \
+    QUEUE_SIZE, ImportAbort, read_tasks, \
+    lookup_candidates, SentinelImportTask, SingletonImportTask, action, \
+    group_albums, _extend_pipeline
+from beets.ui.commands import _summary_judgment, manual_id
 from beets.util import pipeline
 
 
@@ -24,6 +26,30 @@ def save_or_set_apply_matches(session, task):
 
 class WebImporter(importer.ImportSession):
     tasks = list()
+
+    def search_id(self, task, search_id):
+        if task.is_album:
+            _, _, prop = autotag.tag_album(
+                task.items, search_ids=search_id.split()
+            )
+        else:
+            prop = autotag.tag_item(task.item, search_ids=search_id.split())
+        if len(prop.candidates) > 0:
+            task.candidates = prop.candidates
+            task.rec = prop.recommendation
+        return task
+
+    def search_name(self, task, name, artist):
+        if task.is_album:
+            _, _, prop = autotag.tag_album(
+                task.items, artist, name
+            )
+        else:
+            prop = autotag.tag_item(task.item, artist, name)
+        if len(prop.candidates) > 0:
+            task.candidates = prop.candidates
+            task.rec = prop.recommendation
+        return task
 
     def as_tracks(self, task):
         def emitter(task):
@@ -68,7 +94,8 @@ class WebImporter(importer.ImportSession):
             pl.run_sequential()
 
     def lookup_stages(self):
-        return [lookup_candidates(self), save_or_set_apply_matches(self)] + self.generate_stages()
+        return [lookup_candidates(self),
+                save_or_set_apply_matches(self)] + self.generate_stages()
 
     def generate_stages(self):
         stages = []
