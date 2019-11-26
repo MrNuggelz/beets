@@ -10,6 +10,9 @@
     </script>
     <script src="{{ url_for('static', filename='backbone.js') }}"></script>
     <script src="{{ url_for('static', filename='beets.js') }}"></script>
+    <script type="text/javascript"
+            src="http://ajax.googleapis.com/ajax/libs/jquery/1.3.2/jquery.min.js"></script>
+    <script src="{{ url_for('static', filename='util.js') }}"></script>
     <script>
         function applyTask(task_index) {
             console.log('accepting task :' + task_index);
@@ -18,7 +21,10 @@
                 url: '/api/import/apply',
                 type: 'PUT',
                 contentType: 'application/json',
-                data: JSON.stringify({"task_index": task_index ,"candidate_index": 0 }),
+                data: JSON.stringify({
+                    "task_index": task_index,
+                    "candidate_index": 0
+                }),
                 success: function (data) {
                     window.location.href = "/import"
                 },
@@ -94,7 +100,11 @@
                 url: '/api/import/searchName',
                 type: 'PUT',
                 contentType: 'application/json',
-                data: JSON.stringify({"task_index": task_index, 'artist': artist, 'name': name}),
+                data: JSON.stringify({
+                    "task_index": task_index,
+                    'artist': artist,
+                    'name': name
+                }),
                 success: function (data) {
                     window.location.replace("/import")
                 },
@@ -103,125 +113,18 @@
                 }
             });
         }
-
-        function enterSearch(el, task_index) {
-            $("button[name='searchNameButton']").remove();
-            $("input[name='artist']").remove();
-            $("input[name='album']").remove();
-            $("button[name='searchIdButton']").remove();
-            $("input[name='searchId']").remove();
-            var artist = $("<input>").attr("name", "artist").val("artist");
-            var album = $("<input>").attr("name", "album").val("album");
-            $(el).parent().append(artist,album);
-            var button = $("<button>",
-                {
-                    text: 'search',
-                    click: function() {
-                        $.ajax({
-                            url: '/api/import/searchName',
-                            type: 'PUT',
-                            contentType: 'application/json',
-                            data: JSON.stringify({"task_index": task_index, 'artist': artist.val(), 'name': album.val()}),
-                            success: function (data) {
-                                window.location.replace("/import")
-                            }
-                        });
-                    }
-                }).attr("name", "searchNameButton");
-            $(el).parent().append(button);
-        }
-
-        function enterSearchId(el, task_index) {
-            $("button[name='searchIdButton']").remove();
-            $("input[name='searchId']").remove();
-            $("button[name='searchNameButton']").remove();
-            $("input[name='artist']").remove();
-            $("input[name='album']").remove();
-            var searchId = $("<input>").attr("name", "searchId").val("searchId");
-            $(el).parent().append(searchId);
-            var button = $("<button>",
-                {
-                    text: 'search',
-                    click: function() {
-                        $.ajax({
-                            url: '/api/import/searchId',
-                            type: 'PUT',
-                            contentType: 'application/json',
-                            data: JSON.stringify({"task_index": task_index, 'id': searchId.val()}),
-                            success: function (data) {
-                                window.location.replace("/import")
-                            }
-                        });
-                    }
-                }).attr("name", "searchIdButton");
-            $(el).parent().append(button);
-        }
     </script>
 </head>
 <section class="content">
-    <div style="float: left">
-        <span>Tasks:</span><br>
-        {% for task in imports %}
-        {% if task.candidates.__len__() > 0 %}
-            {% if task.is_album %}
-                <div class="importTask">
-                    {% if task.paths.__len__() > 0 %}
-                    <span>{{ task.paths[0].decode('utf-8') }} ({{ task.items.__len__() }} items)</span><br>
-                    {% endif %}
-                    <span>Tagging:</span><br>
-                    <span style="margin-left: 2em;">{{ task.cur_artist }} - {{ task.cur_album }}</span><br>
-                    <span>URL:</span><br>
-                    <span style="margin-left: 2em;">{{ task.candidates[0].info.data_url }}</span><br>
-                    <span>(Similarity {{ 100*(1.00-task.candidates[0].distance.distance) }})</span><br>
-                    <button onclick=applyTask({{ loop.index0 }})>Apply</button>
-                    <button onclick=skip({{ loop.index0 }})>Skip</button>
-                    <button onclick=asIs({{ loop.index0 }})>Use as-is</button>
-                    <button onclick=asTracks({{ loop.index0 }})>As Tracks</button>
-                    <button onclick=enterSearch(this,{{ loop.index0 }})>Enter search</button>
-                    <button onclick=enterSearchId(this,{{ loop.index0 }})>Enter Id</button>
-                    <br>
-                </div>
-            {% else %}
-                <div class="importTask">
-                    {% if task.paths.__len__() > 0 %}
-                    <span>{{ task.paths[0].decode('utf-8') }} ({{ task.items.__len__() }} items)</span><br>
-                    {% endif %}
-                    <span>Tagging:</span><br>
-                    <span style="margin-left: 2em;">{{ task.item.artist }} - {{ task.item.title }}</span><br>
-                    <span>URL:</span><br>
-                    <span style="margin-left: 2em;">{{ task.candidates[0].info.data_url }}</span><br>
-                    <span>(Similarity {{ 100*(1.00-task.candidates[0].distance.distance) }})</span><br>
-                    <button onclick=applyTask({{ loop.index0 }})>Apply</button>
-                    <button onclick=skip({{ loop.index0 }})>Skip</button>
-                    <button onclick=asIs({{ loop.index0 }})>Use as-is</button>
-                    <form>
-                        <input>
-                        <button onclick=enterSearch(this,{{ loop.index0 }})>Enter search</button>
-                    </form>
-                    <button onclick=enterSearchId(this,{{ loop.index0 }})>Enter Id</button>
-                    <br>
-                </div>
-            {% endif %}
-        {% endif %}
-        {% endfor %}
-    </div>
-
     <div style="float: right">
         <span>Import Music:</span>
         <form action="/import" method="POST">
             <span>Path:</span><input name="path">
             <input type="submit" value="start">
         </form>
-        <div id="candidates">
-        </div>
-        <form hidden="hidden" id="search" method="PUT">
-            <span>Artist:</span><input name="artist"><br>
-            <span>Album:</span><input name="album">
-            <input type="submit" value="start">
-        </form>
-        <form hidden="hidden" id="searchId" method="PUT">
-            <span>ID:</span><input name="id">
-            <input type="submit" value="Find">
-        </form>
+    </div>
+
+    <div id="tasks" style="float: left">
+        <span>Tasks:</span><br>
     </div>
 </section>

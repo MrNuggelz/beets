@@ -194,29 +194,43 @@ class QueryConverter(PathConverter):
 class EverythingConverter(PathConverter):
     regex = '.*?'
 
+
 class TaskEncoder(JSONEncoder):
 
     def default(self, o):
-        # if isinstance(o,ImportTask):
-        #     return {
-        #         'candidates': self.default(o.candidates[0]),
-        #         'cur_album':o.cur_album,
-        #         'cur_artist':o.cur_artist,
-        #         'is_album':o.is_album,
-        #         # 'items': o.items,
-        #         'paths':o.paths,
-        #         'search_ids': o.search_ids,
-        #         'toppath': o.toppath
-        #         }
+        if isinstance(o,ImportTask):
+            return {
+                'candidates': self.default(o.candidates),
+                'cur_album': o.cur_album,
+                'cur_artist': o.cur_artist,
+                'is_album': o.is_album,
+                'items': self.default(o.items),
+                'paths': o.paths,
+                'toppath': o.toppath
+                }
         if isinstance(o, AlbumMatch):
             return {
-                'distance': o.distance.distance,
-                'info': o.info
+                'distance': self.default(o.distance),
+                'info': o.info,
+                'mapping': [(self.default(key),self.default(value)) for key,value in o.mapping.items()],
+                'extra_tracks': o.extra_tracks
             }
-        if isinstance(o,Distance):
-            return "distance"
-        if isinstance(o,TrackInfo) or isinstance(o,AlbumInfo):
+        if isinstance(o, Distance):
+            return {
+                'distance': o.distance,
+                'penalties': o.keys(),
+                'tracks': dict((x.track_id,self.default(y)) for x,y in o.tracks.items()) if hasattr(o,'tracks') else dict()
+            }
+        if isinstance(o, list):
+            return [self.default(x) for x in o]
+        if isinstance(o, TrackInfo) or isinstance(o, AlbumInfo):
             return o.__dict__
+        if isinstance(o, beets.library.Item):
+            return {
+                'title': o.title.strip(),
+                'path': o.path,
+                'track': o.track,
+            }
         return str(o)
 
 # Flask setup.
@@ -303,7 +317,7 @@ session = None
 def run_import():
     global session
     if request.method == 'GET':
-        return flask.render_template('import.html',imports=session.tasks if session else [])
+        return flask.render_template('import.html')
     elif request.method == 'POST':
         form = request.form
         if not form or 'path' not in form or not type(form['path']) is str:
@@ -312,13 +326,21 @@ def run_import():
         session = WebImporter(g.lib,None,paths,None)
         session.run()
         plugins.send('import', lib=g.lib, paths=paths)
-        return flask.render_template('import.html',imports=session.tasks if session else [])
+        return flask.render_template('import.html')
 
 
 @app.route('/api/import/<int:task_index>')
 def import_info(task_index):
     global session
     return jsonify(session.tasks[task_index])
+
+
+@app.route('/api/tasks')
+def get_tasks():
+    global session
+    if session:
+        return jsonify(session.tasks)
+    return jsonify([])
 
 
 @app.route('/api/import/skip', methods=['PUT'])
