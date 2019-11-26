@@ -158,3 +158,28 @@ body {
 #player .disabled {
     color: #666;
 }
+
+span.indend {
+    margin-left: 2em;
+}
+
+td
+{
+    padding-right:15px;
+}
+
+table
+{
+    padding-top:15px;
+    padding-bottom:15px;
+}
+
+div .taskDiv {
+    margin: 10px;
+    padding: 5px;
+    background-color: #999999;
+}
+
+div .actions {
+    padding-top:15px;
+}
