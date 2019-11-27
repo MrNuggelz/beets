@@ -3,7 +3,6 @@ class TaskChange {
         this.div = $("<div>").addClass("taskDiv");
         this.actionsDiv = $("<div>").addClass("actions");
         $('div[id=tasks]').append(this.div);
-        this.div.append(buttonDiv);
     }
 
     addButtons(index) {
@@ -247,6 +246,7 @@ class TaskChange {
         }
 
         this.addButtons(index);
+        this.div.append(this.actionsDiv);
     }
 
     enterSearch(task_index) {
