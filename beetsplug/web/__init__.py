@@ -200,6 +200,7 @@ class TaskEncoder(JSONEncoder):
         if isinstance(o,ImportTask):
             return {
                 'candidates': self.default(o.candidates),
+                'match': self.default(o.match),
                 'cur_album': o.cur_album,
                 'cur_artist': o.cur_artist,
                 'is_album': o.is_album,
@@ -342,6 +343,14 @@ def get_tasks():
     return jsonify([])
 
 
+@app.route('/api/import/candidate', methods=['PUT'])
+def import_choose_candidate():
+    global session
+    data = request.get_json()
+    session.choose_candidate(data['task_index'], data['candidate_index'])
+    return jsonify(session.tasks[data['task_index']])
+
+
 @app.route('/api/import/skip', methods=['PUT'])
 def import_skip():
     global session
@@ -393,7 +402,11 @@ def import_apply():
     global session
     data = request.get_json()
     task = session.tasks.pop(data['task_index'])
-    task.set_choice(task.candidates[data['candidate_index']])
+    if task.match :
+        match = task.match
+    else:
+        match = task.candidates[0]
+    task.set_choice(match)
     session.import_task(task)
     return jsonify(task)
 
