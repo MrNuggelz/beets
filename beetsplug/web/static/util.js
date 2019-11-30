@@ -1,17 +1,51 @@
+function selectCandidate(task_index, candidate_index) {
+    $.ajax({
+        url: '/api/import/candidate',
+        type: 'PUT',
+        contentType: 'application/json',
+        data: JSON.stringify({
+            "task_index": task_index,
+            "candidate_index": candidate_index
+        }),
+        success: function (data) {
+            window.location.replace("/import")
+        }
+    });
+}
+
+function hideCandidates(div,button) {
+    button.text("show candidates");
+    button.click(function () { showCandidates(div,button) });
+    div.css('display', 'none')
+}
+
+function showCandidates(div,button) {
+    button.text("hide candidates");
+    button.click(function () {
+        hideCandidates(div,button);
+    });
+    div.css('display', 'block');
+}
+
 class TaskChange {
     constructor() {
+        this.candidatesDiv = $("<div>").hide();
         this.div = $("<div>").addClass("taskDiv");
         this.actionsDiv = $("<div>").addClass("actions");
         $('div[id=tasks]').append(this.div);
     }
 
     addButtons(index) {
+        const candidatesDiv = this.candidatesDiv;
         this.createButton(this.actionsDiv, function () { applyTask(index) }, "Apply");
         this.createButton(this.actionsDiv, function () { skip(index) }, "Skip");
         this.createButton(this.actionsDiv, function () { asIs(index) }, "As Is");
         this.createButton(this.actionsDiv, function () { asTracks(index) }, "As Tracks");
-        this.createButton(this.actionsDiv, function () { searchName(taskDiv, index) }, "enter Search");
-        this.createButton(this.actionsDiv, function () { searchId(taskDiv, index) }, "enter Id");
+        this.createButton(this.actionsDiv, this.enterSearch, "enter Search");
+        this.createButton(this.actionsDiv, this.enterSearchId, "enter Id");
+        const candidateButton = $('<button>').text("show candidates");
+        candidateButton.click(function () { showCandidates(candidatesDiv,candidateButton) });
+        this.actionsDiv.append(candidateButton);
     }
 
     createButton(el, fn, t) {
@@ -24,12 +58,12 @@ class TaskChange {
         this.div.append($('<br>'));
     }
 
-    table(rows) {
+    table(rows, el=this.div) {
         const table = $('<table>');
         for (let i = 0; i < rows.length; i++) {
             table.append(rows[i]);
         }
-        this.div.append(table);
+        el.append(table);
     }
 
     row(elems) {
@@ -110,7 +144,10 @@ class TaskChange {
             $("div[id='tasks']").append(e1);
             return;
         }
-        const match = task.candidates[0];
+        let match = task.match;
+        if (match === "None") {
+            match = task.candidates[0];
+        }
         if (task.cur_artist !== match.info.artist || (task.cur_album !== match.info.album && match.info.album !== "letious Artists")) {
             let artist_l = null;
             let album_l = null;
@@ -247,6 +284,24 @@ class TaskChange {
 
         this.addButtons(index);
         this.div.append(this.actionsDiv);
+
+        // candidates
+        rows = [];
+        for (let i = 0; i < task.candidates.length; i++ ){
+            let candidate = task.candidates[i];
+            const tr = $('<tr>');
+            tr.append($('<td>').append($('<button>').text("select").click(function () {
+                selectCandidate(index, i);
+            })));
+            tr.append($('<td>').text(`${candidate.info.artist} - ${candidate.info.album} 
+             (${((1 - candidate.distance.distance) * 100).toFixed(2)}%)
+              ${this.penaltyString(candidate.distance)}
+               (${this.disambigString(candidate.info)})`));
+            rows.push(tr);
+        }
+        this.table(rows,this.candidatesDiv);
+
+        this.div.append(this.candidatesDiv);
     }
 
     enterSearch(task_index) {

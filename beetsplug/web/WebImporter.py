@@ -27,6 +27,10 @@ def save_or_set_apply_matches(session, task):
 class WebImporter(importer.ImportSession):
     tasks = list()
 
+    def choose_candidate(self, task_index, candidate_index):
+        task = self.tasks[task_index]
+        task.match = task.candidates[candidate_index]
+
     def search_id(self, task, search_id):
         if task.is_album:
             _, _, prop = autotag.tag_album(
