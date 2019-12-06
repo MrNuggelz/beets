@@ -13,6 +13,44 @@ function selectCandidate(task_index, candidate_index) {
     });
 }
 
+function human_seconds_short(interval) {
+    let floored_interval = Math.floor(interval);
+    const hour = Math.floor(floored_interval / 60).toString().padStart(2, "0");
+    const minute = (floored_interval % 60).toString().padStart(2, "0");
+    return `${hour}:${minute}`
+}
+
+
+function human_bytes(size) {
+    const powers = ['', 'K', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y', 'H'];
+    let unit = 'B';
+    for (let i = 0; i < powers.length; i++) {
+        const power = powers[i];
+        if (size < 1024) {
+            return `${size.toFixed(1)} ${power}${unit}`
+        }
+        size /= 1024.0;
+        unit = 'iB'
+    }
+    return "big"
+}
+
+
+function duplicateAction(task_index, action) {
+    $.ajax({
+        url: '/api/import/resolveDuplicates',
+        type: 'PUT',
+        contentType: 'application/json',
+        data: JSON.stringify({
+            "task_index": task_index,
+            "duplicate_action": action
+        }),
+        success: function (data) {
+            window.location.replace("/import")
+        }
+    });
+}
+
 function hideCandidates(div,button) {
     button.text("show candidates");
     button.click(function () { showCandidates(div,button) });
@@ -35,6 +73,20 @@ class TaskChange {
         $('div[id=tasks]').append(this.div);
     }
 
+    display_path(path, item_count) {
+        if (typeof path === 'object') {
+            if (path.length === 0) {
+                return
+            }
+            for (let i = 0; i < path.length - 1; i++) {
+                this.spanLine(path[i]);
+            }
+            this.spanLine(`${path[path.length-1]} (${item_count} items)`);
+        } else if (typeof path === 'string') {
+            this.spanLine(`${path} (${item_count} items)`);
+        }
+    }
+
     addButtons(index) {
         const candidatesDiv = this.candidatesDiv;
         this.createButton(this.actionsDiv, function () { applyTask(index) }, "Apply");
@@ -46,6 +98,13 @@ class TaskChange {
         const candidateButton = $('<button>').text("show candidates");
         candidateButton.click(function () { showCandidates(candidatesDiv,candidateButton) });
         this.actionsDiv.append(candidateButton);
+    }
+
+    duplicateActions (index) {
+        this.createButton(this.actionsDiv, function () { skip(index) }, "Skip new");
+        this.createButton(this.actionsDiv, function () { duplicateAction(index,'k') }, "Keep both");
+        this.createButton(this.actionsDiv, function () { duplicateAction(index,'r') }, "Remove old");
+        this.createButton(this.actionsDiv, function () { duplicateAction(index,'m') }, "Merge all");
     }
 
     createButton(el, fn, t) {
@@ -66,7 +125,7 @@ class TaskChange {
         el.append(table);
     }
 
-    row(elems) {
+    static row(elems) {
         const tr = $('<tr>');
         for (let i = 0; i < elems.length; i++) {
             tr.append($('<td>').text(elems[i]));
@@ -82,7 +141,7 @@ class TaskChange {
         this.line(node);
     }
 
-    penaltyString(distance) {
+    static penaltyString(distance) {
         const penalties = [];
         const keys = distance.penalties;
         for (let j = 0; j < keys.length; j++) {
@@ -97,7 +156,7 @@ class TaskChange {
         return '';
     }
 
-    disambigString(info) {
+    static disambigString(info) {
         const disambig = [];
         if (info.data_source && info.data_source !== "MusicBrainz") {
             disambig.push(info.data_source);
@@ -137,8 +196,52 @@ class TaskChange {
         }
     }
 
+    static summarize_items(items) {
+        const summary_parts = [];
+        summary_parts.push(`${items.length} items`);
+
+        const format_counts = new Map();
+
+        let average_bitrate = 0;
+        let total_duration = 0;
+        let total_filesize = 0;
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            format_counts.set(item.format, (format_counts.get(item.format) || 0) + 1);
+            average_bitrate += item.bitrate;
+            total_duration += item.length;
+            total_filesize += item.filesize;
+        }
+        if (format_counts.length === 1) {
+            summary_parts.push(items[0].format)
+        } else {
+            const format_entries = format_counts.entries();
+            for (let i = 0; i < format_entries.length; i++) {
+                let fmt = format_entries[i][0];
+                let count = format_entries[i][1];
+                summary_parts.push(`${fmt} ${count}`)
+            }
+        }
+
+        summary_parts.push(`${Math.floor(average_bitrate / items.length / 1000)}kbps`);
+        summary_parts.push(`${human_seconds_short(total_duration)}`);
+        summary_parts.push(`${human_bytes(total_filesize)}`);
+        return summary_parts.join(", ");
+    }
+
     showChange(task, index) {
-        this.spanLine(`${task.paths[0]} (${task.items.length} items)`);
+        if (task.found_duplicates) {
+            this.spanLine(`"${task.cur_artist} - ${task.cur_album}" is already in the Library`);
+            for (let i = 0; i < task.found_duplicates.length; i++) {
+                const duplicate = task.found_duplicates[i];
+                this.spanLine(`Old: ${TaskChange.summarize_items(duplicate.items)}`);
+            }
+            this.spanLine(`New: ${TaskChange.summarize_items(task.imported_items)}`);
+            this.duplicateActions(index);
+            this.div.append(this.actionsDiv);
+            return
+        }
+        this.display_path(task.paths, task.items.length);
         if (task.candidates.length <= 0) {
             let e1 = $("<span>").attr("text", "no candidates found");
             $("div[id='tasks']").append(e1);
@@ -180,12 +283,12 @@ class TaskChange {
         // distance
         info.push(`(Similarity: ${((1 - match.distance.distance) * 100).toFixed(2)}%)`);
 
-        let penalties = this.penaltyString(match.distance);
+        let penalties = TaskChange.penaltyString(match.distance);
         if (penalties !== '') {
             info.push(penalties);
         }
 
-        const disambig = this.disambigString(match.info);
+        const disambig = TaskChange.disambigString(match.info);
         if (disambig !== '') {
             info.push(`(${disambig})`);
         }
@@ -246,7 +349,7 @@ class TaskChange {
             // TODO
 
             // Penalties
-            penalties = this.penaltyString(match.distance.tracks[track_info.track_id]);
+            penalties = TaskChange.penaltyString(match.distance.tracks[track_info.track_id]);
             if (lhs !== rhs || penalties) {
                 lines.push([` * ${lhs}`, `-> ${rhs}`, penalties])
             }
@@ -254,7 +357,7 @@ class TaskChange {
 
         let rows = [];
         for (let i = 0; i < lines.length; i++) {
-            rows.push(this.row(lines[i]));
+            rows.push(TaskChange.row(lines[i]));
         }
         this.table(rows);
 
@@ -263,8 +366,7 @@ class TaskChange {
             this.spanLine(`Missing tracks (${match.extra_tracks.length}/${match.info.tracks.length})`);
             for (let i = 0; i < match.extra_tracks.length; i++) {
                 const track_info = match.extra_tracks[i];
-                const interval = Math.floor(track_info.length);
-                this.spanLine(`! (${track_info.title} (#${track_info.index}) (${Math.floor(interval / 60)}:${interval % 60})`, true);
+                this.spanLine(`! (${track_info.title} (#${track_info.index}) (${human_seconds_short(track_info.length)})`, true);
             }
         }
 
@@ -295,8 +397,8 @@ class TaskChange {
             })));
             tr.append($('<td>').text(`${candidate.info.artist} - ${candidate.info.album} 
              (${((1 - candidate.distance.distance) * 100).toFixed(2)}%)
-              ${this.penaltyString(candidate.distance)}
-               (${this.disambigString(candidate.info)})`));
+              ${TaskChange.penaltyString(candidate.distance)}
+               (${TaskChange.disambigString(candidate.info)})`));
             rows.push(tr);
         }
         this.table(rows,this.candidatesDiv);
