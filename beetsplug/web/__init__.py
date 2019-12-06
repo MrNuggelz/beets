@@ -19,7 +19,7 @@ from __future__ import division, absolute_import, print_function
 from beets.autotag import Distance, AlbumMatch, AlbumInfo, TrackInfo
 from flask.json import jsonify, JSONEncoder
 
-from beets.importer import action, SingletonImportTask, ImportTask
+from beets.importer import action, SingletonImportTask, ImportTask, _freshen_items
 from beets.plugins import BeetsPlugin
 from beets import ui, plugins
 from beets import util
@@ -206,8 +206,12 @@ class TaskEncoder(JSONEncoder):
                 'cur_artist': o.cur_artist,
                 'is_album': o.is_album,
                 'items': self.default(o.items),
-                'paths': o.paths,
-                'toppath': o.toppath
+                'paths': [str(p) for p in o.paths],
+                # 'toppath': o.toppath,
+                'imported_items': o.imported_items() if
+                    hasattr(o, 'found_duplicates') else None,
+                'found_duplicates': self.default(o.found_duplicates) if
+                    hasattr(o, 'found_duplicates') else None,
                 }
         if isinstance(o, AlbumMatch):
             return {
@@ -231,6 +235,14 @@ class TaskEncoder(JSONEncoder):
                 'title': o.title.strip(),
                 'path': o.path,
                 'track': o.track,
+                'format': o.format,
+                'bitrate': o.bitrate,
+                'filesize': o.filesize,
+                'length': o.length
+            }
+        if isinstance(o, beets.library.Album):
+            return {
+                'items': self.default(list(o.items()))
             }
         return str(o)
 
@@ -324,6 +336,7 @@ def run_import():
         if not form or 'path' not in form or not type(form['path']) is str:
             return "paths must be a set"
         paths = [form['path']]
+        session = None
         session = WebImporter(g.lib,None,paths,None)
         session.run()
         plugins.send('import', lib=g.lib, paths=paths)
@@ -382,9 +395,11 @@ def search_name():
 def import_as_is():
     global session
     data = request.get_json()
-    task = session.tasks.pop(data['task_index'])
+    task = session.tasks[data['task_index']]
     task.set_choice(action.ASIS)
-    session.import_task(task)
+    if session.resolved_duplicates(data['task_index']):
+        session.import_task(task)
+        del session.tasks[data['task_index']]
     return jsonify(task)
 
 
@@ -398,17 +413,39 @@ def import_as_tracks():
     return jsonify(task)
 
 
+@app.route('/api/import/resolveDuplicates', methods=['PUT'])
+def import_resolve_duplicates():
+    global session
+    data = request.get_json()
+    task = session.tasks.pop(data['task_index'])
+    if not task.match:
+        task.set_choice(task.candidates[0])
+
+    sel = data['duplicate_action']
+    if sel == u'k':
+        # Keep both. Do nothing; leave the choice intact.
+        pass
+    elif sel == u'r':
+        # Remove old.
+        task.should_remove_duplicates = True
+    elif sel == u'm':
+        session.merge_duplicates(task)
+        return jsonify([])
+
+    session.import_task(task)
+    return jsonify(task)
+
+
 @app.route('/api/import/apply', methods=['PUT'])
 def import_apply():
     global session
     data = request.get_json()
-    task = session.tasks.pop(data['task_index'])
-    if task.match :
-        match = task.match
-    else:
-        match = task.candidates[0]
-    task.set_choice(match)
-    session.import_task(task)
+    task = session.tasks[data['task_index']]
+    if not task.match:
+        task.set_choice(task.candidates[0])
+    if session.resolved_duplicates(data['task_index']):
+        session.import_task(task)
+        del session.tasks[data['task_index']]
     return jsonify(task)
 
 
