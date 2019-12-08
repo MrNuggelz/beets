@@ -285,17 +285,23 @@ class TaskChange {
         this.addButtons(index);
         this.div.append(this.actionsDiv);
 
-        // if (task.found_duplicates) {
-        //     this.spanLine(`"${task.cur_artist} - ${task.cur_album}" is already in the Library`);
-        //     for (let i = 0; i < task.found_duplicates.length; i++) {
-        //         const duplicate = task.found_duplicates[i];
-        //         this.spanLine(`Old: ${TaskChange.summarize_items(duplicate.items)}`);
-        //     }
-        //     this.spanLine(`New: ${TaskChange.summarize_items(task.imported_items)}`);
-        //     this.duplicateActions(index);
-        //     this.div.append(this.actionsDiv);
-        //     return
-        // }
+        let rows = [];
+        for (let i = 0; i < task.candidates.length; i++ ){
+            let candidate = task.candidates[i];
+            const tr = $('<tr>');
+            tr.append($('<td>').append($('<button>').text("select").click(function () {
+                selectCandidate(index, i);
+            })));
+            tr.append($('<td>').text(`${candidate.info.artist} - ${candidate.info.title} 
+             (${((1 - candidate.distance.distance) * 100).toFixed(2)}%)
+              ${TaskChange.penaltyString(candidate.distance)}
+               (${TaskChange.disambigString(candidate.info)})`));
+            rows.push(tr);
+        }
+        this.table(rows,this.candidatesDiv);
+
+        this.div.append(this.candidatesDiv);
+
     }
 
     summerizeItems(task, match, index) {
