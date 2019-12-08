@@ -13,6 +13,10 @@ function selectCandidate(task_index, candidate_index) {
     });
 }
 
+function distString(distance) {
+    return ((1 - distance) * 100).toFixed(2).toString()
+}
+
 function human_seconds_short(interval) {
     let floored_interval = Math.floor(interval);
     const hour = Math.floor(floored_interval / 60).toString().padStart(2, "0");
@@ -196,9 +200,11 @@ class TaskChange {
         }
     }
 
-    static summarize_items(items) {
+    static summarize_items(items, singleton) {
         const summary_parts = [];
-        summary_parts.push(`${items.length} items`);
+        if (!singleton) {
+            summary_parts.push(`${items.length} items`);
+        }
 
         const format_counts = new Map();
 
@@ -229,14 +235,77 @@ class TaskChange {
         return summary_parts.join(", ");
     }
 
-    showChange(task, index) {
+    info_line(match) {
+        const info = [];
+        info.push(`(Similarity: ${distString(match.distance.distance)})`);
+        let penalties = TaskChange.penaltyString(match.distance);
+        if (penalties !== '') {
+            info.push(penalties);
+        }
+
+        const disambig = TaskChange.disambigString(match.info);
+        if (disambig !== '') {
+            info.push(`(${disambig})`);
+        }
+        this.spanLine(info.join(" "));
+    }
+
+    showItemChange(task, match, index) {
+        const cur_artist = task.artist;
+        const new_artist = match.info.artist;
+        const cur_title = task.title;
+        const new_title = match.info.title;
+        if (task.found_duplicates) {
+            this.spanLine(`"${cur_artist} - ${cur_title}" is already in the Library`);
+            for (let i = 0; i < task.found_duplicates.length; i++) {
+                const duplicate = task.found_duplicates[i];
+                this.spanLine(`Old: ${TaskChange.summarize_items([duplicate], true)}`);
+            }
+            this.spanLine(`New: ${TaskChange.summarize_items(task.imported_items, true)}`);
+            this.duplicateActions(index);
+            this.div.append(this.actionsDiv);
+            return
+        }
+
+        if (cur_artist !== new_artist || cur_title !== new_title) {
+            this.spanLine("Correcting track tags from:");
+            this.spanLine(`${cur_artist} - ${cur_title}`, true);
+            this.spanLine("To:");
+            this.spanLine(`${new_artist} - ${new_title}`, true);
+        } else {
+            this.spanLine(`Tagging track: ${cur_artist} ${cur_title}`)
+        }
+
+        if (match.info.data_url !== "undefined") {
+            this.spanLine(`${match.info.data_url}`, true)
+        }
+
+        this.info_line(match);
+
+        this.addButtons(index);
+        this.div.append(this.actionsDiv);
+
+        // if (task.found_duplicates) {
+        //     this.spanLine(`"${task.cur_artist} - ${task.cur_album}" is already in the Library`);
+        //     for (let i = 0; i < task.found_duplicates.length; i++) {
+        //         const duplicate = task.found_duplicates[i];
+        //         this.spanLine(`Old: ${TaskChange.summarize_items(duplicate.items)}`);
+        //     }
+        //     this.spanLine(`New: ${TaskChange.summarize_items(task.imported_items)}`);
+        //     this.duplicateActions(index);
+        //     this.div.append(this.actionsDiv);
+        //     return
+        // }
+    }
+
+    summerizeItems(task, match, index) {
         if (task.found_duplicates) {
             this.spanLine(`"${task.cur_artist} - ${task.cur_album}" is already in the Library`);
             for (let i = 0; i < task.found_duplicates.length; i++) {
                 const duplicate = task.found_duplicates[i];
-                this.spanLine(`Old: ${TaskChange.summarize_items(duplicate.items)}`);
+                this.spanLine(`Old: ${TaskChange.summarize_items(duplicate.items, false)}`);
             }
-            this.spanLine(`New: ${TaskChange.summarize_items(task.imported_items)}`);
+            this.spanLine(`New: ${TaskChange.summarize_items(task.imported_items, false)}`);
             this.duplicateActions(index);
             this.div.append(this.actionsDiv);
             return
@@ -246,10 +315,6 @@ class TaskChange {
             let e1 = $("<span>").attr("text", "no candidates found");
             $("div[id='tasks']").append(e1);
             return;
-        }
-        let match = task.match;
-        if (match === "None") {
-            match = task.candidates[0];
         }
         if (task.cur_artist !== match.info.artist || (task.cur_album !== match.info.album && match.info.album !== "letious Artists")) {
             let artist_l = null;
@@ -279,20 +344,8 @@ class TaskChange {
             this.spanLine("URL:");
             this.spanLine(`${match.info.data_url}`, true)
         }
-        const info = [];
-        // distance
-        info.push(`(Similarity: ${((1 - match.distance.distance) * 100).toFixed(2)}%)`);
 
-        let penalties = TaskChange.penaltyString(match.distance);
-        if (penalties !== '') {
-            info.push(penalties);
-        }
-
-        const disambig = TaskChange.disambigString(match.info);
-        if (disambig !== '') {
-            info.push(`(${disambig})`);
-        }
-        this.spanLine(info.join(" "));
+        this.info_line(match);
 
         // tracks
         const pairs = match.mapping;
@@ -349,7 +402,7 @@ class TaskChange {
             // TODO
 
             // Penalties
-            penalties = TaskChange.penaltyString(match.distance.tracks[track_info.track_id]);
+            const penalties = TaskChange.penaltyString(match.distance.tracks[track_info.track_id]);
             if (lhs !== rhs || penalties) {
                 lines.push([` * ${lhs}`, `-> ${rhs}`, penalties])
             }
@@ -475,7 +528,15 @@ window.onload = function () {
             const tasks = JSON.parse(json);
             for (let task_index = 0; task_index < tasks.length; task_index++) {
                 const task = tasks[task_index];
-                new TaskChange().showChange(task, task_index);
+                let match = task.match;
+                if (match === "None") {
+                    match = task.candidates[0];
+                }
+                if (task.is_album) {
+                    new TaskChange().summerizeItems(task, match, task_index);
+                } else {
+                    new TaskChange().showItemChange(task, match, task_index)
+                }
             }
         },
         error: function (xhr, ajaxOptions, thrownError) {

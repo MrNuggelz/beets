@@ -16,7 +16,7 @@
 """A Web interface to beets."""
 from __future__ import division, absolute_import, print_function
 
-from beets.autotag import Distance, AlbumMatch, AlbumInfo, TrackInfo
+from beets.autotag import Distance, AlbumMatch, AlbumInfo, TrackInfo, TrackMatch
 from flask.json import jsonify, JSONEncoder
 
 from beets.importer import action, SingletonImportTask, ImportTask, _freshen_items
@@ -31,7 +31,6 @@ import os
 from unidecode import unidecode
 import json
 import base64
-
 
 # Utilities.
 from beets.ui.commands import dist_string, penalty_string, disambig_string
@@ -101,6 +100,7 @@ def is_expand():
 def resource(name):
     """Decorates a function to handle RESTful HTTP requests for a resource.
     """
+
     def make_responder(retriever):
         def responder(ids):
             entities = [retriever(id) for id in ids]
@@ -115,14 +115,17 @@ def resource(name):
                 )
             else:
                 return flask.abort(404)
+
         responder.__name__ = 'get_{0}'.format(name)
         return responder
+
     return make_responder
 
 
 def resource_query(name):
     """Decorates a function to handle RESTful HTTP queries for resources.
     """
+
     def make_responder(query_func):
         def responder(queries):
             return app.response_class(
@@ -132,8 +135,10 @@ def resource_query(name):
                 ),
                 mimetype='application/json'
             )
+
         responder.__name__ = 'query_{0}'.format(name)
         return responder
+
     return make_responder
 
 
@@ -141,14 +146,17 @@ def resource_list(name):
     """Decorates a function to handle RESTful HTTP request for a list of
     resources.
     """
+
     def make_responder(list_all):
         def responder():
             return app.response_class(
                 json_generator(list_all(), root=name, expand=is_expand()),
                 mimetype='application/json'
             )
+
         responder.__name__ = 'all_{0}'.format(name)
         return responder
+
     return make_responder
 
 
@@ -197,7 +205,18 @@ class EverythingConverter(PathConverter):
 class TaskEncoder(JSONEncoder):
 
     def default(self, o):
-        if isinstance(o,ImportTask):
+        if isinstance(o, SingletonImportTask):
+            return {
+                'artist': o.item.artist,
+                'title': o.item.title,
+                'match': self.default(o.match),
+                'candidates': self.default(o.candidates),
+                'imported_items': o.imported_items() if
+                hasattr(o, 'found_duplicates') else None,
+                'found_duplicates': self.default(o.found_duplicates) if
+                hasattr(o, 'found_duplicates') else None,
+            }
+        if isinstance(o, ImportTask):
             return {
                 'candidates': self.default(o.candidates),
                 'match': self.default(o.match),
@@ -208,16 +227,21 @@ class TaskEncoder(JSONEncoder):
                 'paths': [str(p) for p in o.paths],
                 # 'toppath': o.toppath,
                 'imported_items': o.imported_items() if
-                    hasattr(o, 'found_duplicates') else None,
+                hasattr(o, 'found_duplicates') else None,
                 'found_duplicates': self.default(o.found_duplicates) if
-                    hasattr(o, 'found_duplicates') else None,
-                }
+                hasattr(o, 'found_duplicates') else None,
+            }
         if isinstance(o, AlbumMatch):
             return {
                 'distance': self.default(o.distance),
                 'info': o.info,
-                'mapping': [(self.default(key),self.default(value)) for key,value in o.mapping.items()],
+                'mapping': [(self.default(key), self.default(value)) for key, value in o.mapping.items()],
                 'extra_tracks': o.extra_tracks
+            }
+        if isinstance(o, TrackMatch):
+            return {
+                'distance': self.default(o.distance),
+                'info': o.info,
             }
         if isinstance(o, Distance):
             return {
@@ -244,6 +268,7 @@ class TaskEncoder(JSONEncoder):
                 'items': self.default(list(o.items()))
             }
         return str(o)
+
 
 # Flask setup.
 
@@ -323,7 +348,9 @@ def item_at_path(path):
     else:
         return flask.abort(404)
 
+
 session = None
+
 
 @app.route('/import', methods=['GET', 'POST'])
 def run_import():
@@ -336,7 +363,7 @@ def run_import():
             return "paths must be a set"
         paths = [form['path']]
         session = None
-        session = WebImporter(g.lib,None,paths,None)
+        session = WebImporter(g.lib, None, paths, None)
         session.run()
         plugins.send('import', lib=g.lib, paths=paths)
         return flask.render_template('import.html')
@@ -377,7 +404,7 @@ def search_id():
     global session
     data = request.get_json()
     task = session.tasks[data['task_index']]
-    session.search_id(task,data['id'])
+    session.search_id(task, data['id'])
     return jsonify(task)
 
 
@@ -586,6 +613,7 @@ class WebPlugin(BeetsPlugin):
             app.run(host=self.config['host'].as_str(),
                     port=self.config['port'].get(int),
                     debug=opts.debug, threaded=True)
+
         cmd.func = func
         return [cmd]
 
@@ -609,6 +637,7 @@ class ReverseProxied(object):
 
     :param app: the WSGI application
     '''
+
     def __init__(self, app):
         self.app = app
 
