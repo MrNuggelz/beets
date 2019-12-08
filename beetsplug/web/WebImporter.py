@@ -105,7 +105,7 @@ class WebImporter(importer.ImportSession):
                     yield new_task
             yield SentinelImportTask(task.toppath, task.paths)
 
-        self.new_pipeline([emitter(task)], self.lookup_stages())
+        self.new_pipeline(emitter(task), self.lookup_stages())
 
         # pl = pipeline.Pipeline([emitter(task)] + self.lookup_stages())
         #
