@@ -55,18 +55,74 @@ function duplicateAction(task_index, action) {
     });
 }
 
-function hideCandidates(div,button) {
+function hideCandidates(div, button) {
     button.text("show candidates");
-    button.click(function () { showCandidates(div,button) });
+    button.click(function () {
+        showCandidates(div, button)
+    });
     div.css('display', 'none')
 }
 
-function showCandidates(div,button) {
+function showCandidates(div, button) {
     button.text("hide candidates");
     button.click(function () {
-        hideCandidates(div,button);
+        hideCandidates(div, button);
     });
     div.css('display', 'block');
+}
+
+function enterSearch(div, task_index) {
+    $("button[name='searchNameButton']").remove();
+    $("input[name='artist']").remove();
+    $("input[name='album']").remove();
+    $("button[name='searchIdButton']").remove();
+    $("input[name='searchId']").remove();
+    var artist = $("<input>").attr("name", "artist").val("artist");
+    var album = $("<input>").attr("name", "album").val("album");
+    div.append(artist, album);
+    const button = $('<button>').attr("name", "searchNameButton").text("search").click(
+        function () {
+            $.ajax({
+                url: '/api/import/searchName',
+                type: 'PUT',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    "task_index": task_index,
+                    'artist': artist.val(),
+                    'name': album.val()
+                }),
+                success: function (data) {
+                    window.location.replace("/import")
+                }
+            });
+        });
+    div.append(button);
+}
+
+function enterSearchId(div, task_index) {
+    $("button[name='searchIdButton']").remove();
+    $("input[name='searchId']").remove();
+    $("button[name='searchNameButton']").remove();
+    $("input[name='artist']").remove();
+    $("input[name='album']").remove();
+    const searchId = $("<input>").attr("name", "searchId").val("searchId");
+    div.append(searchId);
+    const button = $('<button>').attr("name", "searchNameButton").text("search").click(
+        function () {
+            $.ajax({
+                url: '/api/import/searchId',
+                type: 'PUT',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    "task_index": task_index,
+                    'id': searchId.val()
+                }),
+                success: function (data) {
+                    window.location.replace("/import")
+                }
+            });
+        });
+    div.append(button);
 }
 
 class TaskChange {
@@ -85,7 +141,7 @@ class TaskChange {
             for (let i = 0; i < path.length - 1; i++) {
                 this.spanLine(path[i]);
             }
-            this.spanLine(`${path[path.length-1]} (${item_count} items)`);
+            this.spanLine(`${path[path.length - 1]} (${item_count} items)`);
         } else if (typeof path === 'string') {
             this.spanLine(`${path} (${item_count} items)`);
         }
@@ -93,22 +149,45 @@ class TaskChange {
 
     addButtons(index) {
         const candidatesDiv = this.candidatesDiv;
-        this.createButton(this.actionsDiv, function () { applyTask(index) }, "Apply");
-        this.createButton(this.actionsDiv, function () { skip(index) }, "Skip");
-        this.createButton(this.actionsDiv, function () { asIs(index) }, "As Is");
-        this.createButton(this.actionsDiv, function () { asTracks(index) }, "As Tracks");
-        this.createButton(this.actionsDiv, this.enterSearch, "enter Search");
-        this.createButton(this.actionsDiv, this.enterSearchId, "enter Id");
+        const actionsDiv = this.actionsDiv;
+        this.createButton(this.actionsDiv, function () {
+            applyTask(index)
+        }, "Apply");
+        this.createButton(this.actionsDiv, function () {
+            skip(index)
+        }, "Skip");
+        this.createButton(this.actionsDiv, function () {
+            asIs(index)
+        }, "As Is");
+        this.createButton(this.actionsDiv, function () {
+            asTracks(index)
+        }, "As Tracks");
+        this.createButton(this.actionsDiv, function () {
+            enterSearch(actionsDiv, index)
+        }, "enter Search");
+        this.createButton(this.actionsDiv, function () {
+            enterSearchId(actionsDiv, index)
+        }, "enter Id");
         const candidateButton = $('<button>').text("show candidates");
-        candidateButton.click(function () { showCandidates(candidatesDiv,candidateButton) });
+        candidateButton.click(function () {
+            showCandidates(candidatesDiv, candidateButton)
+        });
         this.actionsDiv.append(candidateButton);
     }
 
-    duplicateActions (index) {
-        this.createButton(this.actionsDiv, function () { skip(index) }, "Skip new");
-        this.createButton(this.actionsDiv, function () { duplicateAction(index,'k') }, "Keep both");
-        this.createButton(this.actionsDiv, function () { duplicateAction(index,'r') }, "Remove old");
-        this.createButton(this.actionsDiv, function () { duplicateAction(index,'m') }, "Merge all");
+    duplicateActions(index) {
+        this.createButton(this.actionsDiv, function () {
+            skip(index)
+        }, "Skip new");
+        this.createButton(this.actionsDiv, function () {
+            duplicateAction(index, 'k')
+        }, "Keep both");
+        this.createButton(this.actionsDiv, function () {
+            duplicateAction(index, 'r')
+        }, "Remove old");
+        this.createButton(this.actionsDiv, function () {
+            duplicateAction(index, 'm')
+        }, "Merge all");
     }
 
     createButton(el, fn, t) {
@@ -121,7 +200,7 @@ class TaskChange {
         this.div.append($('<br>'));
     }
 
-    table(rows, el=this.div) {
+    table(rows, el = this.div) {
         const table = $('<table>');
         for (let i = 0; i < rows.length; i++) {
             table.append(rows[i]);
@@ -286,7 +365,7 @@ class TaskChange {
         this.div.append(this.actionsDiv);
 
         let rows = [];
-        for (let i = 0; i < task.candidates.length; i++ ){
+        for (let i = 0; i < task.candidates.length; i++) {
             let candidate = task.candidates[i];
             const tr = $('<tr>');
             tr.append($('<td>').append($('<button>').text("select").click(function () {
@@ -298,7 +377,7 @@ class TaskChange {
                (${TaskChange.disambigString(candidate.info)})`));
             rows.push(tr);
         }
-        this.table(rows,this.candidatesDiv);
+        this.table(rows, this.candidatesDiv);
 
         this.div.append(this.candidatesDiv);
 
@@ -448,7 +527,7 @@ class TaskChange {
 
         // candidates
         rows = [];
-        for (let i = 0; i < task.candidates.length; i++ ){
+        for (let i = 0; i < task.candidates.length; i++) {
             let candidate = task.candidates[i];
             const tr = $('<tr>');
             tr.append($('<td>').append($('<button>').text("select").click(function () {
@@ -460,69 +539,9 @@ class TaskChange {
                (${TaskChange.disambigString(candidate.info)})`));
             rows.push(tr);
         }
-        this.table(rows,this.candidatesDiv);
+        this.table(rows, this.candidatesDiv);
 
         this.div.append(this.candidatesDiv);
-    }
-
-    enterSearch(task_index) {
-        $("button[name='searchNameButton']").remove();
-        $("input[name='artist']").remove();
-        $("input[name='album']").remove();
-        $("button[name='searchIdButton']").remove();
-        $("input[name='searchId']").remove();
-        var artist = $("<input>").attr("name", "artist").val("artist");
-        var album = $("<input>").attr("name", "album").val("album");
-        this.actionsDiv.append(artist, album);
-        var button = $("<button>",
-                {
-                    text: 'search',
-                    click: function () {
-                        $.ajax({
-                            url: '/api/import/searchName',
-                            type: 'PUT',
-                            contentType: 'application/json',
-                            data: JSON.stringify({
-                                "task_index": task_index,
-                                'artist': artist.val(),
-                                'name': album.val()
-                            }),
-                            success: function (data) {
-                                window.location.replace("/import")
-                            }
-                        });
-                    }
-                }).attr("name", "searchNameButton");
-        this.actionsDiv.parent().append(button);
-    }
-
-    enterSearchId(task_index) {
-        $("button[name='searchIdButton']").remove();
-        $("input[name='searchId']").remove();
-        $("button[name='searchNameButton']").remove();
-        $("input[name='artist']").remove();
-        $("input[name='album']").remove();
-        var searchId = $("<input>").attr("name", "searchId").val("searchId");
-        this.actionsDiv.parent().append(searchId);
-        var button = $("<button>",
-                {
-                    text: 'search',
-                    click: function () {
-                        $.ajax({
-                            url: '/api/import/searchId',
-                            type: 'PUT',
-                            contentType: 'application/json',
-                            data: JSON.stringify({
-                                "task_index": task_index,
-                                'id': searchId.val()
-                            }),
-                            success: function (data) {
-                                window.location.replace("/import")
-                            }
-                        });
-                    }
-                }).attr("name", "searchIdButton");
-        this.actionsDiv.append(button);
     }
 }
 
