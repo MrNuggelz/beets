@@ -114,15 +114,17 @@
     </script>
 </head>
 <section class="content">
-    <div style="float: right">
-        <span>Import Music:</span>
-        <form action="/import" method="POST">
-            <span>Path:</span><input name="path">
-            <input type="submit" value="start">
-        </form>
+    <div id="header">
+        <h1>beets</h1>
+        <button onclick="location.href = '/'" style="float: right;margin: 6px;">Library</button>
     </div>
 
-    <div id="tasks" style="float: left">
+    <div id="tasks" style="margin-top: 36px;float: left">
         <span>Tasks:</span><br>
     </div>
+
+    <form action="/import" method="POST" style="margin-top: 36px;float: right;">
+        <span>Import Music:</span><input name="path" placeholder="path">
+        <input type="submit" value="start">
+    </form>
 </section>
