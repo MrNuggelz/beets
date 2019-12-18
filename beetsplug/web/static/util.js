@@ -549,8 +549,7 @@ window.onload = function () {
     $.ajax({
         url: '/api/tasks',
         type: 'GET',
-        success: function (json) {
-            const tasks = JSON.parse(json);
+        success: function (tasks) {
             for (let task_index = 0; task_index < tasks.length; task_index++) {
                 const task = tasks[task_index];
                 let match = task.match;
