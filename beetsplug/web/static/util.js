@@ -550,16 +550,16 @@ window.onload = function () {
         url: '/api/tasks',
         type: 'GET',
         success: function (tasks) {
-            for (let task_index = 0; task_index < tasks.length; task_index++) {
-                const task = tasks[task_index];
+            for (let task_id in tasks) {
+                const task = tasks[task_id];
                 let match = task.match;
                 if (match === "None") {
                     match = task.candidates[0];
                 }
                 if (task.is_album) {
-                    new TaskChange().summerizeItems(task, match, task_index);
+                    new TaskChange().summerizeItems(task, match, task_id);
                 } else {
-                    new TaskChange().showItemChange(task, match, task_index)
+                    new TaskChange().showItemChange(task, match, task_id)
                 }
             }
         },

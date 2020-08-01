@@ -16,6 +16,8 @@
 """A Web interface to beets."""
 from __future__ import division, absolute_import, print_function
 
+from typing import Union
+
 from beets.autotag import Distance, AlbumMatch, AlbumInfo, TrackInfo, TrackMatch
 from flask.json import jsonify, JSONEncoder
 
@@ -247,7 +249,8 @@ class TaskEncoder(JSONEncoder):
             return {
                 'distance': o.distance,
                 'penalties': o.keys(),
-                'tracks': dict((x.track_id,self.default(y)) for x,y in o.tracks.items()) if hasattr(o,'tracks') else dict()
+                'tracks': dict((x.track_id, self.default(y)) for x, y in o.tracks.items()) if hasattr(o,
+                                                                                                      'tracks') else dict()
             }
         if isinstance(o, list):
             return [self.default(x) for x in o]
@@ -349,7 +352,7 @@ def item_at_path(path):
         return flask.abort(404)
 
 
-session = None
+session: Union[WebImporter, None] = None
 
 
 @app.route('/import', methods=['GET', 'POST'])
@@ -365,14 +368,13 @@ def run_import():
         session = None
         session = WebImporter(g.lib, None, paths, None)
         session.run()
-        plugins.send('import', lib=g.lib, paths=paths)
         return flask.render_template('import.html')
 
 
-@app.route('/api/import/<int:task_index>')
-def import_info(task_index):
+@app.route('/api/import/<int:task_id>')
+def import_info(task_id):
     global session
-    return jsonify(session.tasks[task_index])
+    return jsonify(session.tasks[task_id])
 
 
 @app.route('/api/tasks')
@@ -403,8 +405,7 @@ def import_skip():
 def search_id():
     global session
     data = request.get_json()
-    task = session.tasks[data['task_index']]
-    session.search_id(task, data['id'])
+    task = session.search_id(data['task_index'], data['id'])
     return jsonify(task)
 
 
@@ -412,8 +413,7 @@ def search_id():
 def search_name():
     global session
     data = request.get_json()
-    task = session.tasks[data['task_index']]
-    bla = session.search_name(task, data['artist'], data['name'])
+    task = session.search_name(data['task_index'], data['artist'], data['name'])
     return jsonify(task)
 
 
@@ -424,8 +424,7 @@ def import_as_is():
     task = session.tasks[data['task_index']]
     task.set_choice(action.ASIS)
     if session.resolved_duplicates(data['task_index']):
-        session.import_task(task)
-        del session.tasks[data['task_index']]
+        session.import_task(data['task_index'])
     return jsonify(task)
 
 
@@ -433,9 +432,9 @@ def import_as_is():
 def import_as_tracks():
     global session
     data = request.get_json()
-    task = session.tasks.pop(data['task_index'])
+    task = session.tasks[data['task_index']]
     task.set_choice(action.TRACKS)
-    session.as_tracks(task)
+    session.as_tracks(data['task_index'])
     return jsonify(task)
 
 
@@ -443,7 +442,7 @@ def import_as_tracks():
 def import_resolve_duplicates():
     global session
     data = request.get_json()
-    task = session.tasks.pop(data['task_index'])
+    task = session.tasks[data['task_index']]
     if not task.match:
         task.set_choice(task.candidates[0])
 
@@ -455,10 +454,10 @@ def import_resolve_duplicates():
         # Remove old.
         task.should_remove_duplicates = True
     elif sel == u'm':
-        session.merge_duplicates(task)
+        session.merge_duplicates(data['task_index'])
         return jsonify([])
 
-    session.import_task(task)
+    session.import_task(data['task_index'])
     return jsonify(task)
 
 
@@ -470,8 +469,7 @@ def import_apply():
     if not task.match:
         task.set_choice(task.candidates[0])
     if session.resolved_duplicates(data['task_index']):
-        session.import_task(task)
-        del session.tasks[data['task_index']]
+        session.import_task(data['task_index'])
     return jsonify(task)
 
 

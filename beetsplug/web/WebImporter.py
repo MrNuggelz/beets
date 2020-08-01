@@ -23,7 +23,7 @@ def save_or_set_apply_matches(session, task):
     if type(task) == SentinelImportTask:
         return task
     task.set_choice(action.SKIP)
-    session.tasks.append(task)
+    session.add_task(task)
     return task
 
 
@@ -31,7 +31,15 @@ class WebImporter(importer.ImportSession):
 
     def __init__(self, lib, loghandler, paths, query):
         super().__init__(lib, loghandler, paths, query)
-        self.tasks = list()
+        self.tasks = dict()
+        self.last_task_id = 0
+
+    def next_id(self):
+        self.last_task_id += 1
+        return str(self.last_task_id)
+
+    def add_task(self, task):
+        self.tasks[self.next_id()] = task
 
     def should_resume(self, path):
         return False
@@ -48,11 +56,20 @@ class WebImporter(importer.ImportSession):
     def choose_item(self, task):
         raise NotImplementedError
 
-    def choose_candidate(self, task_index, candidate_index):
-        task = self.tasks[task_index]
+    def choose_candidate(self, task_id, candidate_index):
+        task = self.tasks.get(task_id)
+        if not task:
+            print(task, "not in tasks")
+            return
+        task = self.tasks[task_id]
         task.match = task.candidates[candidate_index]
 
-    def merge_duplicates(self, task):
+    def merge_duplicates(self, task_id):
+        task = self.tasks.pop(task_id, None)
+        if not task:
+            print(task, "not in tasks")
+            return
+        task = self.tasks[task_id]
         # def emitter():
         duplicate_items = task.duplicate_items(self.lib)
         _freshen_items(duplicate_items)
@@ -66,14 +83,11 @@ class WebImporter(importer.ImportSession):
 
         self.new_pipeline([merged_task], self.lookup_stages())
 
-        # pl = pipeline.Pipeline([iter([merged_task])] + self.lookup_stages())
-        #
-        # if config['threaded']:
-        #     pl.run_parallel(QUEUE_SIZE)
-        # else:
-        #     pl.run_sequential()
-
-    def search_id(self, task, search_id):
+    def search_id(self, task_id, search_id):
+        task = self.tasks.get(task_id)
+        if not task:
+            print(task, "not in tasks")
+            return
         if task.is_album:
             _, _, prop = autotag.tag_album(
                 task.items, search_ids=search_id.split()
@@ -85,7 +99,11 @@ class WebImporter(importer.ImportSession):
             task.rec = prop.recommendation
         return task
 
-    def search_name(self, task, name, artist):
+    def search_name(self, task_id, name, artist):
+        task = self.tasks.get(task_id)
+        if not task:
+            print(task, "not in tasks")
+            return
         if task.is_album:
             _, _, prop = autotag.tag_album(
                 task.items, artist, name
@@ -97,7 +115,7 @@ class WebImporter(importer.ImportSession):
             task.rec = prop.recommendation
         return task
 
-    def as_tracks(self, task):
+    def as_tracks(self, task_id):
         def emitter(task):
             for item in task.items:
                 task = SingletonImportTask(task.toppath, item)
@@ -105,55 +123,43 @@ class WebImporter(importer.ImportSession):
                     yield new_task
             yield SentinelImportTask(task.toppath, task.paths)
 
+        task = self.tasks.pop(task_id, None)
+        if not task:
+            print(task, "not in tasks")
+            return
+
         self.new_pipeline(emitter(task), self.lookup_stages())
 
-        # pl = pipeline.Pipeline([emitter(task)] + self.lookup_stages())
-        #
-        # if config['threaded']:
-        #     pl.run_parallel(QUEUE_SIZE)
-        # else:
-        #     pl.run_sequential()
-
-    def import_task(self, task):
-        # def emitter():
-        #     yield task
+    def import_task(self, task_id):
+        task = self.tasks.pop(task_id, None)
+        if not task:
+            print(task, "not in tasks")
+            return
 
         self.set_config(config['import'])
         apply_choice(self, task)
 
         self.new_pipeline([task], self.generate_stages())
-
-        # stages = [emitter()] + self.generate_stages()
-        #
-        # pl = pipeline.Pipeline(stages)
-        #
-        # plugins.send('import_begin', session=self)
-        # if config['threaded']:
-        #     pl.run_parallel(QUEUE_SIZE)
-        # else:
-        #     pl.run_sequential()
         return True
 
     def run(self):
         self.set_config(config['import'])
 
         self.new_pipeline(read_tasks(self), self.lookup_stages())
+        plugins.send('import', lib=self.lib, paths=self.paths)
 
-        # pl = pipeline.Pipeline([read_tasks(self)] + self.lookup_stages())
-        #
-        # plugins.send('import_begin', session=self)
-        # if config['threaded']:
-        #     pl.run_parallel(QUEUE_SIZE)
-        # else:
-        #     pl.run_sequential()
-
-    def resolved_duplicates(self, index):
+    def resolved_duplicates(self, task_id):
+        task = self.tasks.get(task_id)
+        if not task:
+            print(task, "not in tasks")
+            return
         self.set_config(config['import'])
-        task = self.tasks[index]
+        task = self.tasks[task_id]
         resolve_duplicates(self, task)
         return not hasattr(task, 'found_duplicates')
 
     def new_pipeline(self, tasks, stages):
+
         if type(tasks) == list:
             task_iter = iter(tasks)
         else:
@@ -165,17 +171,6 @@ class WebImporter(importer.ImportSession):
             pl.run_parallel(QUEUE_SIZE)
         else:
             pl.run_sequential()
-
-    # def run(self):
-    #     self.set_config(config['import'])
-    #
-    #     pl = pipeline.Pipeline([read_tasks(self)] + self.lookup_stages())
-    #
-    #     plugins.send('import_begin', session=self)
-    #     if config['threaded']:
-    #         pl.run_parallel(QUEUE_SIZE)
-    #     else:
-    #         pl.run_sequential()
 
     def lookup_stages(self):
         return [lookup_candidates(self),
