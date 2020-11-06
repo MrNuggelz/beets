@@ -126,16 +126,16 @@ class DeezerPlugin(MetadataSourcePlugin, BeetsPlugin):
             track_data.get('contributors', [track_data['artist']])
         )
         return TrackInfo(
-            title=track_data['title'],
-            track_id=track_data['id'],
+            title=track_data.get('title',None),
+            track_id=track_data.get('id',None),
             artist=artist,
             artist_id=artist_id,
-            length=track_data['duration'],
-            index=track_data['track_position'],
-            medium=track_data['disk_number'],
-            medium_index=track_data['track_position'],
+            length=track_data.get('duration',None),
+            index=track_data.get('track_position',None),
+            medium=track_data.get('disk_number',None),
+            medium_index=track_data.get('track_position',None),
             data_source=self.data_source,
-            data_url=track_data['link'],
+            data_url=track_data.get('link',None),
         )
 
     def track_for_id(self, track_id=None, track_data=None):
