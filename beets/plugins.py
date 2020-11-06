@@ -708,7 +708,7 @@ class MetadataSourcePlugin(object):
         self._log.debug(
             u"Searching {} for {} '{}'", self.data_source, url_type, id_
         )
-        match = re.search(self.id_regex['pattern'].format(url_type), str(id_))
+        match = re.fullmatch(self.id_regex['pattern'].format(url_type), str(id_))
         if match:
             id_ = match.group(self.id_regex['match_group'])
             if id_:
