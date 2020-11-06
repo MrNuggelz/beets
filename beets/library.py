@@ -1133,6 +1133,9 @@ class Album(LibModel):
         """Return the total number of tracks on all discs on the album
         """
         if self.disctotal == 1 or not beets.config['per_disc_numbering']:
+            if len(self.items()) == 0:
+                log.warn(u'empty album for album id %d' % self.id)
+                return 0
             return self.items()[0].tracktotal
 
         counted = []
